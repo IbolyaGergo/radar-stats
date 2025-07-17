@@ -12,10 +12,14 @@ import xradar as xd
 import wradlib as wrl
 import cmweather
 import sys
+from pathlib import Path
 
-filename = "../data/raw/odim_2024/vol_2024-10-11_00-30-00.h5"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-dtree = xd.io.open_odim_datatree(filename)
+filename =  "data/raw/odim_2024/vol_2024-10-11_00-30-00.h5"
+filepath = PROJECT_ROOT / filename
+
+dtree = xd.io.open_odim_datatree(filepath)
 
 sweep_count = [ int(arg) for arg in sys.argv[1:] ]
 
@@ -23,7 +27,7 @@ fig, ax = plt.subplots()
 for nsweep in sweep_count:
     sweep = f'sweep_{nsweep}'
 
-    data = dtree[sweep]['DBZH']
+    data = dtree[sweep]['TH']
 
     elev = data['elevation'].values[0]
     print(f"Compute correlation for elevation {elev}", flush=True)
