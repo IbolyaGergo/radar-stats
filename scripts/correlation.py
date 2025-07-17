@@ -4,6 +4,8 @@
 Plot correlation between adjacent rays for each elevation.
 """
 
+from pathlib import Path
+import sys
 import numpy as np
 import xarray as xr
 import matplotlib.pyplot as plt
@@ -11,12 +13,10 @@ from matplotlib import gridspec
 import xradar as xd
 import wradlib as wrl
 import cmweather
-import sys
-from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).parent.parent
 
-filename =  "data/raw/odim_2024/vol_2024-10-11_00-30-00.h5"
+filename =  "data/raw/odim_2023/vol_2023-03-12_05-00-56.h5"
 filepath = PROJECT_ROOT / filename
 
 dtree = xd.io.open_odim_datatree(filepath)
@@ -60,4 +60,6 @@ for nsweep in sweep_count:
     ax.plot(corrarr, label=f"elev = {elev}")
 ax.legend()
 ax.set(ylim = (-1, 1))
-plt.show()
+
+output_path = PROJECT_ROOT / "results" / "correlation" / (filepath.stem + "_corr_" + ".png")
+plt.savefig(output_path, dpi=200)
