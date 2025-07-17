@@ -13,33 +13,47 @@ import wradlib as wrl
 import cmweather
 import sys
 
-filename = "../data/raw/odim_2023/vol_2023-03-12_05-55-56.h5"
+filename = "../data/raw/odim_2024/vol_2024-10-11_00-30-00.h5"
 
 dtree = xd.io.open_odim_datatree(filename)
 
-sweep_nums = [ int(arg) for arg in sys.argv[1:] ]
+sweep_count = [ int(arg) for arg in sys.argv[1:] ]
 
 fig, ax = plt.subplots()
-for ns in sweep_nums:
-    sweep = f'sweep_{ns}'
-    data = dtree[sweep]['TH']
-    elev = data['elevation'].values[0]
+for nsweep in sweep_count:
+    sweep = f'sweep_{nsweep}'
 
+    data = dtree[sweep]['DBZH']
+
+    elev = data['elevation'].values[0]
     print(f"Compute correlation for elevation {elev}", flush=True)
 
-    nazim = data['azimuth'].size
-    corrarr = np.empty( nazim - 1 )
-    threshold = data.min(dim='azimuth') + 20
-    for na in range( nazim - 1 ):
-        ray_0 = data.isel(azimuth = na)
-        ray_1 = data.isel(azimuth = na+1)
+    azimuth_count = data['azimuth'].size
+    noise_level_dB = data.min(dim='azimuth')
+    threshold_dB = noise_level_dB + 0
 
-        corrarr[na] = xr.corr(
-            ray_0.where(ray_0 >= threshold),
-            ray_1.where(ray_1 >= threshold) 
-        ) 
+    corrarr = np.empty( azimuth_count - 1 )
+    num_allnan = 0
+    for nazim in range( azimuth_count - 1 ):
+        ray_0 = data.isel(azimuth = nazim)
+        ray_1 = data.isel(azimuth = nazim+1)
+
+        above_noise_0 = ray_0.where(ray_0 >= threshold_dB)
+        above_noise_1 = ray_1.where(ray_1 >= threshold_dB)
+
+        # Check for sufficient number of valid data to compute correlation
+        # Using ufuncs.isfinite insted of notnull:
+        # notnull only deals with nan
+        # ufuncs.isfinite deals also with +-inf (e.g. div by zero)
+        valid = xr.ufuncs.isfinite(above_noise_0) & xr.ufuncs.isfinite(above_noise_1)
+        n_valid = valid.sum()
+
+        if n_valid >= 2: # required for xr.corr
+            corrarr[nazim] = xr.corr( above_noise_0, above_noise_1 ) 
+        else:
+            corrarr[nazim] = np.nan
+
     ax.plot(corrarr, label=f"elev = {elev}")
 ax.legend()
 ax.set(ylim = (-1, 1))
 plt.show()
-# plt.savefig('results/correlation/corr_azim_dbzh_24', dpi=200)
