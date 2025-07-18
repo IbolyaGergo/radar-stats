@@ -16,34 +16,46 @@ import cmweather
 
 PROJECT_ROOT = Path(__file__).parent.parent
 
-filename =  "data/raw/odim_2023/vol_2023-03-12_05-00-56.h5"
+filename = sys.argv[1]
 filepath = PROJECT_ROOT / filename
 
 dtree = xd.io.open_odim_datatree(filepath)
 
-sweep_count = [ int(arg) for arg in sys.argv[1:] ]
+sweeps = [ int(arg) for arg in sys.argv[2:] ]
+max_sweep_idx = dtree.sweep.size - 1
 
 fig, ax = plt.subplots()
-for nsweep in sweep_count:
+for nsweep in sweeps:
+    if nsweep > max_sweep_idx:
+        print(f"Max sweep index is {max_sweep_idx}")
+        break
+
     sweep = f'sweep_{nsweep}'
 
-    data = dtree[sweep]['TH']
+    da_TH = dtree[sweep]['TH']
+    noise_level_dB = da_TH.min(dim='azimuth')
+    threshold_dB = 5
+
+    data_var = "TH"
+    data = dtree[sweep][data_var]
 
     elev = data['elevation'].values[0]
     print(f"Compute correlation for elevation {elev}", flush=True)
 
     azimuth_count = data['azimuth'].size
-    noise_level_dB = data.min(dim='azimuth')
-    threshold_dB = noise_level_dB + 0
+
 
     corrarr = np.empty( azimuth_count - 1 )
     num_allnan = 0
     for nazim in range( azimuth_count - 1 ):
-        ray_0 = data.isel(azimuth = nazim)
-        ray_1 = data.isel(azimuth = nazim+1)
 
-        above_noise_0 = ray_0.where(ray_0 >= threshold_dB)
-        above_noise_1 = ray_1.where(ray_1 >= threshold_dB)
+        ray_0 = data.isel(azimuth = nazim)
+        mask_0 = da_TH.isel(azimuth = nazim) >= noise_level_dB + threshold_dB
+        above_noise_0 = ray_0.where(mask_0)
+
+        ray_1 = data.isel(azimuth = nazim+1)
+        mask_1 = da_TH.isel(azimuth = nazim+1) >= noise_level_dB + threshold_dB
+        above_noise_1 = ray_1.where(mask_1)
 
         # Check for sufficient number of valid data to compute correlation
         # Using ufuncs.isfinite insted of notnull:
@@ -60,6 +72,10 @@ for nsweep in sweep_count:
     ax.plot(corrarr, label=f"elev = {elev}")
 ax.legend()
 ax.set(ylim = (-1, 1))
+ax.set_title(f"threshold = noise + {threshold_dB}dB")
 
-output_path = PROJECT_ROOT / "results" / "correlation" / (filepath.stem + "_corr_" + ".png")
-plt.savefig(output_path, dpi=200)
+# output_path = PROJECT_ROOT / "results" / "correlation" / (
+# filepath.stem + "_corr" + f"_{data_var}" + f"_thrs_{threshold_dB}" + ".png")
+# 
+# plt.savefig(output_path, dpi=200)
+# print(f"Created {output_path}")
